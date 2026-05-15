@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 
 	"github.com/bayezsyka/farros-drive/server/internal/drive"
 	"github.com/bayezsyka/farros-drive/server/internal/security"
@@ -183,7 +182,8 @@ func (h *Handler) ListTrash(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) RestoreTrash(w http.ResponseWriter, r *http.Request) {
 	var payload struct {
-		TrashPath string `json:"trashPath"`
+		TrashPath   string `json:"trashPath"`
+		RestorePath string `json:"restorePath"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		ErrorResponse(w, http.StatusBadRequest, "invalid json")
@@ -192,7 +192,7 @@ func (h *Handler) RestoreTrash(w http.ResponseWriter, r *http.Request) {
 
 	// trashPath is like /.trash/12345_file.txt
 	id := filepath.Base(payload.TrashPath)
-	err := h.Service.RestoreFromTrash(id)
+	err := h.Service.RestoreFromTrash(id, payload.RestorePath)
 	if err != nil {
 		ErrorResponse(w, http.StatusInternalServerError, err.Error())
 		return
@@ -203,7 +203,8 @@ func (h *Handler) RestoreTrash(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) EmptyTrash(w http.ResponseWriter, r *http.Request) {
 	var payload struct {
-		TrashPath string `json:"trashPath"`
+		TrashPath   string `json:"trashPath"`
+		RestorePath string `json:"restorePath"`
 	}
 	json.NewDecoder(r.Body).Decode(&payload)
 

@@ -92,7 +92,7 @@ func (s *Service) SaveFile(parentPath, name string, content io.Reader) (string, 
 	}
 
 	dirPath := security.GetFullPath(s.Root, sanitizedParent)
-	
+
 	// Handle suffix for non-overwrite
 	ext := filepath.Ext(name)
 	base := strings.TrimSuffix(name, ext)
@@ -154,27 +154,35 @@ func (s *Service) MoveToTrash(userPath string) error {
 	return os.Rename(fullPath, targetPath)
 }
 
-func (s *Service) RestoreFromTrash(trashID string) error {
-	// trashID is the filename in .trash
+func (s *Service) RestoreFromTrash(trashID, restorePath string) error {
 	trashPath := filepath.Join(s.Root, s.TrashDir, trashID)
-	
-	// Original name is after the timestamp prefix
-	parts := strings.SplitN(trashID, "_", 2)
-	if len(parts) < 2 {
-		return fmt.Errorf("invalid trash ID")
-	}
-	originalName := parts[1]
 
-	targetPath := filepath.Join(s.Root, originalName)
-	
-	// Handle collisions in root
+	if restorePath == "" {
+		parts := strings.SplitN(trashID, "_", 2)
+		if len(parts) < 2 {
+			return fmt.Errorf("invalid trash ID")
+		}
+		restorePath = "/" + parts[1]
+	}
+
+	sanitizedRestore, err := security.SanitizePath(restorePath, false)
+	if err != nil {
+		return err
+	}
+
+	targetPath := security.GetFullPath(s.Root, sanitizedRestore)
+	if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+		return err
+	}
+
 	if _, err := os.Stat(targetPath); err == nil {
-		ext := filepath.Ext(originalName)
-		base := strings.TrimSuffix(originalName, ext)
+		ext := filepath.Ext(targetPath)
+		base := strings.TrimSuffix(targetPath, ext)
 		counter := 1
 		for {
-			targetPath = filepath.Join(s.Root, fmt.Sprintf("%s_restored_%d%s", base, counter, ext))
-			if _, err := os.Stat(targetPath); os.IsNotExist(err) {
+			candidate := fmt.Sprintf("%s_restored_%d%s", base, counter, ext)
+			if _, err := os.Stat(candidate); os.IsNotExist(err) {
+				targetPath = candidate
 				break
 			}
 			counter++

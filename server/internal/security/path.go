@@ -56,3 +56,8 @@ func SanitizePath(userPath string, allowTrash bool) (string, error) {
 func GetFullPath(rootDir, sanitizedPath string) string {
 	return filepath.Join(rootDir, sanitizedPath)
 }
+
+// IsHidden reports whether a file or directory name is hidden.
+func IsHidden(name string) bool {
+	return strings.HasPrefix(name, ".")
+}
