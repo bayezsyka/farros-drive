@@ -1,44 +1,38 @@
 import clsx from 'clsx'
-import { HardDrive } from 'lucide-react'
+import { HardDrive, LogOut } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 import { useDriveStore } from '../../hooks/useDriveStore'
-import Badge from '../ui/Badge'
 
 function Sidebar({ items }) {
-  const { backend } = useDriveStore()
+  const { backend, logout } = useDriveStore()
 
   return (
-    <aside className="hidden border-r border-white/60 bg-white/55 px-6 py-8 backdrop-blur xl:flex xl:flex-col">
-      <div className="panel-surface p-5">
-        <div className="flex items-center gap-4">
-          <div className="rounded-3xl bg-farros-navy p-3 text-farros-ivory">
-            <HardDrive size={26} />
+    <aside className="hidden border-r border-black/5 bg-white/72 px-5 py-5 backdrop-blur xl:flex xl:flex-col">
+      <div className="rounded-[28px] border border-black/5 bg-farros-navy px-5 py-5 text-farros-ivory">
+        <div className="flex items-center gap-3">
+          <div className="rounded-2xl bg-white/12 p-3">
+            <HardDrive size={20} />
           </div>
           <div>
-            <h1 className="font-serif text-2xl tracking-tight text-farros-navy">Farros Drive</h1>
-            <p className="mt-1 text-sm leading-5 text-farros-ink">
-              Ruang berkas pribadi untuk server Farros.
-            </p>
+            <p className="font-serif text-2xl">Farros Drive</p>
+            <p className="text-sm text-farros-ivory/70">drive.farros.space</p>
           </div>
         </div>
-        <div className="mt-5 flex flex-wrap gap-2">
-          <Badge variant="success">drive.farros.space</Badge>
-          <Badge variant={backend.connected ? 'success' : 'neutral'}>{backend.statusLabel}</Badge>
+        <div className="mt-5 flex items-center gap-2 text-xs text-farros-ivory/78">
+          <span className={clsx('inline-block h-2.5 w-2.5 rounded-full', backend.connected ? 'bg-emerald-400' : 'bg-amber-400')} />
+          <span>{backend.connected ? 'Backend online' : 'Backend bermasalah'}</span>
         </div>
       </div>
 
-      <nav className="mt-8 space-y-2">
+      <nav className="mt-6 space-y-1.5">
         {items.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
-            end={item.end}
             className={({ isActive }) =>
               clsx(
                 'flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition',
-                isActive
-                  ? 'bg-farros-navy text-farros-ivory shadow-lg shadow-farros-navy/10'
-                  : 'text-farros-ink hover:bg-white/70',
+                isActive ? 'bg-white text-farros-navy shadow-sm' : 'text-farros-ink hover:bg-white/70',
               )
             }
           >
@@ -48,16 +42,14 @@ function Sidebar({ items }) {
         ))}
       </nav>
 
-      <div className="panel-muted mt-auto p-5">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-farros-ink">
-          Status backend
-        </p>
-        <p className="mt-3 text-sm leading-6 text-farros-ink">
-          {backend.connected
-            ? `API aktif dan membaca storage nyata dari ${backend.storageRoot}.`
-            : 'Frontend sedang memakai fallback localStorage karena API belum aktif atau belum dikonfigurasi.'}
-        </p>
-      </div>
+      <button
+        type="button"
+        onClick={logout}
+        className="mt-auto flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold text-farros-ink transition hover:bg-white/70"
+      >
+        <LogOut size={18} />
+        <span>Keluar</span>
+      </button>
     </aside>
   )
 }

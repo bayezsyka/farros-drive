@@ -46,3 +46,7 @@ export function formatRelativeTime(value) {
 
   return rtf.format(Math.round(diffMinutes / 525600), 'year')
 }
+
+export function formatPercent(value = 0) {
+  return `${Number(value || 0).toFixed(1)}%`
+}

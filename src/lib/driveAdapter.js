@@ -75,7 +75,7 @@ export function adaptApiItem(item) {
   const trashPath = item.trashPath ? normalizeVirtualPath(item.trashPath) : ''
 
   return {
-    id: trashPath || itemPath,
+    id: normalizeVirtualPath(item.id || trashPath || itemPath),
     name: item.name,
     type: (item.kind || item.type) === 'folder' ? 'folder' : 'file',
     extension: item.extension || getExtension(item.name),
@@ -83,7 +83,6 @@ export function adaptApiItem(item) {
     size: Number(item.size || 0),
     path: itemPath,
     parentPath: normalizeVirtualPath(item.parentPath || getParentPath(itemPath)),
-    createdAt: item.createdAt,
     updatedAt: item.updatedAt,
     deletedAt: item.deletedAt || null,
     trashPath,
@@ -91,27 +90,31 @@ export function adaptApiItem(item) {
   }
 }
 
-export function adaptDummyItems(items) {
-  const itemsById = new Map(items.map((item) => [item.id, item]))
+export function adaptShareItem(item) {
+  return {
+    id: item.id || item.token,
+    token: item.token,
+    name: item.name,
+    type: item.type === 'folder' ? 'folder' : 'file',
+    path: normalizeVirtualPath(item.path || '/'),
+    allowDownload: Boolean(item.allowDownload),
+    createdAt: item.createdAt,
+    expiresAt: item.expiresAt || null,
+    permission: item.permission || 'viewer',
+    url: item.url,
+  }
+}
 
-  return items.map((item) => {
-    const itemPath = normalizeVirtualPath(item.path)
-    const parentItem = item.parentId ? itemsById.get(item.parentId) : null
-
-    return {
-      id: itemPath,
-      name: item.name,
-      type: item.type,
-      extension: item.extension || getExtension(item.name),
-      mimeType: item.mimeType || 'application/octet-stream',
-      size: Number(item.size || 0),
-      path: itemPath,
-      parentPath: parentItem ? normalizeVirtualPath(parentItem.path) : '/',
-      createdAt: item.createdAt,
-      updatedAt: item.updatedAt,
-      deletedAt: item.deletedAt || null,
-      trashPath: '',
-      originalPath: '',
-    }
-  })
+export function adaptPublicItem(item) {
+  return {
+    id: normalizeVirtualPath(item.id || item.path),
+    name: item.name,
+    type: item.type === 'folder' ? 'folder' : 'file',
+    extension: item.extension || getExtension(item.name),
+    mimeType: item.mimeType || 'application/octet-stream',
+    size: Number(item.size || 0),
+    path: normalizeVirtualPath(item.path),
+    parentPath: normalizeVirtualPath(item.parentPath || getParentPath(item.path)),
+    updatedAt: item.updatedAt,
+  }
 }

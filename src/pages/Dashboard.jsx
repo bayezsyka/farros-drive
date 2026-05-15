@@ -1,137 +1,52 @@
-import {
-  Files as FilesIcon,
-  FolderKanban,
-  HardDrive,
-  MoveRight,
-  Sparkles,
-} from 'lucide-react'
 import { Link } from 'react-router-dom'
-import StorageUsageCard from '../components/drive/StorageUsageCard'
-import StatCard from '../components/drive/StatCard'
-import Badge from '../components/ui/Badge'
-import Card from '../components/ui/Card'
+import StorageSummaryCard from '../components/drive/StorageSummaryCard'
 import { useDriveStore } from '../hooks/useDriveStore'
-import { formatBytes, formatRelativeTime } from '../lib/formatters'
+import { formatBytes } from '../lib/formatters'
+
+function Stat({ label, value }) {
+  return (
+    <div className="rounded-[24px] border border-black/5 bg-white/80 px-4 py-4">
+      <p className="text-sm text-farros-ink">{label}</p>
+      <p className="mt-2 text-2xl font-semibold text-farros-navy">{value}</p>
+    </div>
+  )
+}
 
 function Dashboard() {
-  const { backend, currentMode, getRecentItems, getStorageSummary } = useDriveStore()
-  const recentItems = getRecentItems(5)
+  const { getStorageSummary, getTrashItems, shares } = useDriveStore()
   const summary = getStorageSummary()
 
   return (
-    <div className="space-y-6">
-      <section className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.9fr)]">
-        <Card className="overflow-hidden p-6 sm:p-8">
-          <div className="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-2xl">
-              <div className="flex flex-wrap gap-2">
-                <Badge variant="success">Farros Drive</Badge>
-                <Badge variant={backend.connected ? 'success' : 'neutral'}>
-                  {backend.connected ? 'Tersambung ke server' : 'Mode simulasi'}
-                </Badge>
-              </div>
-              <h1 className="section-title mt-4">Kelola berkas server pribadi dari satu tampilan yang rapi.</h1>
-              <p className="mt-4 max-w-xl text-sm leading-7 text-farros-ink sm:text-base">
-                {backend.connected
-                  ? 'Farros Drive sudah membaca storage nyata untuk local development melalui backend Go, sambil tetap mempertahankan alur UI yang rapi.'
-                  : 'Fase ini fokus pada simulasi frontend untuk alur pertukaran file laptop, HP, dan server Proxmox/CT. Struktur UI sudah disiapkan agar mudah dihubungkan ke backend Go nanti.'}
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-3">
-              <Link
-                to="/drive/files"
-                className="inline-flex h-11 items-center justify-center rounded-2xl bg-farros-navy px-4 text-sm font-semibold text-farros-ivory transition hover:bg-farros-navy/92"
-              >
-                Upload Berkas
-              </Link>
-              <Link
-                to="/drive/files"
-                className="inline-flex h-11 items-center justify-center rounded-2xl bg-farros-sage px-4 text-sm font-semibold text-farros-navy transition hover:bg-farros-sage/85"
-              >
-                Buat Folder
-              </Link>
-            </div>
-          </div>
-        </Card>
-
-        <StorageUsageCard summary={summary} />
-      </section>
-
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          icon={FilesIcon}
-          label="Total Berkas"
-          value={summary.fileCount}
-          note={currentMode === 'server' ? 'File aktif dari storage server' : 'File aktif di simulasi drive'}
-        />
-        <StatCard
-          icon={FolderKanban}
-          label="Total Folder"
-          value={summary.folderCount}
-          note={currentMode === 'server' ? 'Folder aktif dari storage server' : 'Folder aktif siap dinavigasi'}
-        />
-        <StatCard
-          icon={HardDrive}
-          label="Total Ukuran"
-          value={formatBytes(summary.usedBytes)}
-          note={currentMode === 'server' ? 'Akumulasi file di storage server' : 'Akumulasi ukuran file dummy'}
-        />
-        <StatCard
-          icon={Sparkles}
-          label="Berkas Terbaru"
-          value={summary.recentFileName}
-          note="File paling baru diubah"
-        />
-      </section>
-
-      <section className="grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(320px,0.9fr)]">
-        <Card className="p-6">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-farros-ink">Aktivitas terbaru</p>
-              <h2 className="mt-2 text-2xl font-semibold text-farros-navy">5 file terakhir</h2>
-            </div>
-            <Link to="/drive/recent" className="text-sm font-semibold text-farros-navy">
-              Lihat semua
+    <div className="space-y-4">
+      <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+        <div className="panel-surface rounded-[32px] px-6 py-6">
+          <h2 className="font-serif text-4xl text-farros-navy">Farros Drive</h2>
+          <p className="mt-3 max-w-xl text-sm text-farros-ink">Berkas pribadi, preview cepat, dan link publik read-only.</p>
+          <div className="mt-5 flex flex-wrap gap-3">
+            <Link to="/drive/files" className="inline-flex h-11 items-center rounded-2xl bg-farros-navy px-4 text-sm font-semibold text-farros-ivory">
+              Buka Berkas
+            </Link>
+            <Link to="/drive/shared" className="inline-flex h-11 items-center rounded-2xl bg-farros-mist px-4 text-sm font-semibold text-farros-navy">
+              Lihat Link
             </Link>
           </div>
-          <div className="mt-6 space-y-3">
-            {recentItems.map((item) => (
-              <div
-                key={item.id}
-                className="flex flex-col gap-3 rounded-3xl border bg-farros-ivory/80 px-4 py-4 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div>
-                  <p className="font-semibold text-farros-navy">{item.name}</p>
-                  <p className="mt-1 text-sm text-farros-ink">{item.path}</p>
-                </div>
-                <div className="flex items-center gap-4 text-sm text-farros-ink">
-                  <span>{formatBytes(item.size)}</span>
-                  <span>{formatRelativeTime(item.updatedAt)}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
+        </div>
+        <StorageSummaryCard summary={summary} />
+      </div>
 
-        <Card className="p-6">
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-farros-ink">Storage path</p>
-          <h2 className="mt-3 text-2xl font-semibold text-farros-navy">Lokasi penyimpanan nanti</h2>
-          <div className="mt-6 rounded-[24px] bg-farros-navy px-5 py-6 text-farros-ivory">
-            <p className="text-sm uppercase tracking-[0.2em] text-farros-ivory/70">Target server</p>
-            <p className="mt-3 font-mono text-lg">/srv/drive</p>
-          </div>
-          <p className="mt-5 text-sm leading-6 text-farros-ink">
-            {backend.connected
-              ? `Panel frontend tetap terpisah dari storage. Backend saat ini membaca root ${backend.storageRoot}.`
-              : 'Panel web akan ditempatkan terpisah di `/opt/farros-drive` dan terhubung ke backend Go pada fase berikutnya.'}
-          </p>
-          <Link to="/drive/files" className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-farros-navy">
-            Buka area berkas
-            <MoveRight size={16} />
-          </Link>
-        </Card>
-      </section>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Stat label="Berkas" value={summary.drive?.fileCount || 0} />
+        <Stat label="Folder" value={summary.drive?.folderCount || 0} />
+        <Stat label="Sampah" value={getTrashItems().length} />
+        <Stat label="Link aktif" value={shares.length} />
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Stat label="Farros Drive" value={formatBytes(summary.drive?.usedBytes || 0)} />
+        <Stat label="Disk CT" value={formatBytes(summary.disk?.usedBytes || 0)} />
+        <Stat label="Tersisa" value={formatBytes(summary.disk?.freeBytes || 0)} />
+        <Stat label="Mount" value={summary.disk?.mount || '/'} />
+      </div>
     </div>
   )
 }

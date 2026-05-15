@@ -1,11 +1,43 @@
 const imageExtensions = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg']
 const archiveExtensions = ['zip', 'rar', 'gz', '7z', 'tar']
 const tableExtensions = ['xlsx', 'xls', 'csv']
-const codeExtensions = ['txt', 'env', 'conf', 'ini', 'log']
+const textExtensions = ['txt', 'env', 'conf', 'ini', 'log', 'json', 'md', 'sql', 'nginx', 'yml', 'yaml']
+const videoExtensions = ['mp4', 'webm', 'mov']
+const audioExtensions = ['mp3', 'wav', 'ogg']
 
 export function getExtension(name = '') {
   const parts = name.split('.')
   return parts.length > 1 ? parts.at(-1).toLowerCase() : ''
+}
+
+export function getPreviewKind(item) {
+  const extension = item.extension || getExtension(item.name)
+
+  if (item.type === 'folder') {
+    return 'folder'
+  }
+
+  if (imageExtensions.includes(extension)) {
+    return 'image'
+  }
+
+  if (extension === 'pdf') {
+    return 'pdf'
+  }
+
+  if (videoExtensions.includes(extension)) {
+    return 'video'
+  }
+
+  if (audioExtensions.includes(extension)) {
+    return 'audio'
+  }
+
+  if (textExtensions.includes(extension)) {
+    return 'text'
+  }
+
+  return 'other'
 }
 
 export function getFileIconName(item) {
@@ -13,30 +45,38 @@ export function getFileIconName(item) {
     return 'folder'
   }
 
-  const extension = item.extension || getExtension(item.name)
+  const previewKind = getPreviewKind(item)
 
-  if (extension === 'sql') {
+  if (item.extension === 'sql') {
     return 'database'
   }
 
-  if (extension === 'pdf') {
+  if (previewKind === 'pdf') {
     return 'text'
   }
 
-  if (archiveExtensions.includes(extension)) {
+  if (archiveExtensions.includes(item.extension || getExtension(item.name))) {
     return 'archive'
   }
 
-  if (imageExtensions.includes(extension)) {
+  if (previewKind === 'image') {
     return 'image'
   }
 
-  if (tableExtensions.includes(extension)) {
+  if (tableExtensions.includes(item.extension || getExtension(item.name))) {
     return 'table'
   }
 
-  if (codeExtensions.includes(extension)) {
+  if (previewKind === 'text') {
     return 'code'
+  }
+
+  if (previewKind === 'video') {
+    return 'video'
+  }
+
+  if (previewKind === 'audio') {
+    return 'audio'
   }
 
   return 'file'
@@ -49,7 +89,7 @@ export function getFileCategory(item) {
     return 'folder'
   }
 
-  if (['pdf', 'doc', 'docx', 'txt'].includes(extension)) {
+  if (['pdf', 'doc', 'docx', 'txt', 'md', 'json'].includes(extension)) {
     return 'dokumen'
   }
 
@@ -70,59 +110,4 @@ export function getFileCategory(item) {
   }
 
   return 'lainnya'
-}
-
-export function getItemStatus(item) {
-  return item.deletedAt ? 'Di sampah' : 'Aktif'
-}
-
-export function buildPath(item, itemsMap) {
-  const segments = [item.name]
-  let currentParentId = item.parentId
-
-  while (currentParentId) {
-    const parent = itemsMap.get(currentParentId)
-
-    if (!parent) {
-      break
-    }
-
-    segments.unshift(parent.name)
-    currentParentId = parent.parentId
-  }
-
-  return `/${segments.join('/')}`
-}
-
-export function sortDriveItems(items) {
-  return [...items].sort((left, right) => {
-    if (left.type !== right.type) {
-      return left.type === 'folder' ? -1 : 1
-    }
-
-    return left.name.localeCompare(right.name, 'id-ID')
-  })
-}
-
-export function getBreadcrumbTrail(items, folderId) {
-  if (!folderId) {
-    return []
-  }
-
-  const itemsMap = new Map(items.map((item) => [item.id, item]))
-  const trail = []
-  let currentId = folderId
-
-  while (currentId) {
-    const item = itemsMap.get(currentId)
-
-    if (!item) {
-      break
-    }
-
-    trail.unshift(item)
-    currentId = item.parentId
-  }
-
-  return trail
 }

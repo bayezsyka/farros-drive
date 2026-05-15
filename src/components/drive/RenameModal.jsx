@@ -9,8 +9,8 @@ function RenameModal({ item, open, onClose, onSubmit }) {
     <Modal
       open={open}
       onClose={onClose}
-      title="Rename Item"
-      description="Perbarui nama file atau folder dummy sebelum backend dipasang."
+      title="Ubah Nama"
+      description={item?.name || ''}
     >
       <form
         className="space-y-4"

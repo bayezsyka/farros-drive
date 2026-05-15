@@ -1,7 +1,8 @@
+import clsx from 'clsx'
 import { useEffect } from 'react'
 import { X } from 'lucide-react'
 
-function Modal({ children, onClose, open, title, description }) {
+function Modal({ children, contentClassName, description, onClose, open, panelClassName, title }) {
   useEffect(() => {
     if (!open) {
       return undefined
@@ -23,7 +24,7 @@ function Modal({ children, onClose, open, title, description }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-farros-navy/30 px-4 py-6 backdrop-blur-sm">
-      <div className="panel-surface max-h-[90vh] w-full max-w-xl overflow-hidden">
+      <div className={clsx('panel-surface max-h-[90vh] w-full max-w-xl overflow-hidden', panelClassName)}>
         <div className="flex items-start justify-between border-b px-6 py-5">
           <div className="space-y-1">
             <h3 className="text-xl font-semibold text-farros-navy">{title}</h3>
@@ -38,7 +39,7 @@ function Modal({ children, onClose, open, title, description }) {
             <X size={18} />
           </button>
         </div>
-        <div className="max-h-[calc(90vh-88px)] overflow-y-auto px-6 py-5">{children}</div>
+        <div className={clsx('max-h-[calc(90vh-88px)] overflow-y-auto px-6 py-5', contentClassName)}>{children}</div>
       </div>
     </div>
   )

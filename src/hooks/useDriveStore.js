@@ -1,9 +1,11 @@
 import { createContext, createElement, useCallback, useContext, useEffect, useState } from 'react'
 import { dummyDriveItems } from '../data/dummyDriveItems'
-import { apiClient, configuredApiBaseUrl, getDownloadUrl, isApiConfigured, resolvedApiBaseUrl } from '../lib/apiClient'
+import { apiClient, configuredApiBaseUrl, getDownloadUrl, getPreviewUrl, isApiConfigured, resolvedApiBaseUrl } from '../lib/apiClient'
 import {
   adaptApiItem,
-  adaptDummyItems,
+  adaptPublicItem,
+  adaptShareItem,
+  buildBreadcrumbItems,
   getParentPath,
   getPathName,
   joinDrivePath,
@@ -13,7 +15,6 @@ import {
 import { getExtension } from '../lib/fileUtils'
 
 const STORAGE_KEY = 'farros-drive-items'
-const CAPACITY_BYTES = 20 * 1024 * 1024 * 1024
 
 const DriveStoreContext = createContext(null)
 
@@ -37,6 +38,7 @@ function sanitizeLocalName(rawName) {
 function splitName(name) {
   const extension = getExtension(name)
   const suffix = extension ? `.${extension}` : ''
+
   return {
     base: suffix ? name.slice(0, -suffix.length) : name,
     suffix,
@@ -81,12 +83,33 @@ function normalizeLocalItem(item) {
     size: type === 'folder' ? 0 : Number(item.size || 0),
     path: itemPath,
     parentPath: normalizeVirtualPath(item.parentPath || getParentPath(itemPath)),
-    createdAt: item.createdAt || new Date().toISOString(),
-    updatedAt: item.updatedAt || item.createdAt || new Date().toISOString(),
+    updatedAt: item.updatedAt || new Date().toISOString(),
     deletedAt: item.deletedAt || null,
     trashPath: item.trashPath ? normalizeVirtualPath(item.trashPath) : '',
     originalPath: item.originalPath ? normalizeVirtualPath(item.originalPath) : '',
   }
+}
+
+function adaptDummyItems(items) {
+  const itemsById = new Map(items.map((item) => [item.id, item]))
+
+  return items.map((item) => {
+    const itemPath = normalizeVirtualPath(item.path)
+    const parentItem = item.parentId ? itemsById.get(item.parentId) : null
+
+    return normalizeLocalItem({
+      id: itemPath,
+      name: item.name,
+      type: item.type,
+      extension: item.extension || getExtension(item.name),
+      mimeType: item.mimeType || 'application/octet-stream',
+      size: Number(item.size || 0),
+      path: itemPath,
+      parentPath: parentItem ? normalizeVirtualPath(parentItem.path) : '/',
+      updatedAt: item.updatedAt,
+      deletedAt: item.deletedAt || null,
+    })
+  })
 }
 
 function loadLocalItems() {
@@ -94,12 +117,12 @@ function loadLocalItems() {
     const rawItems = window.localStorage.getItem(STORAGE_KEY)
 
     if (!rawItems) {
-      return adaptDummyItems(dummyDriveItems).map(normalizeLocalItem)
+      return adaptDummyItems(dummyDriveItems)
     }
 
     return JSON.parse(rawItems).map(normalizeLocalItem)
   } catch {
-    return adaptDummyItems(dummyDriveItems).map(normalizeLocalItem)
+    return adaptDummyItems(dummyDriveItems)
   }
 }
 
@@ -114,137 +137,213 @@ function toTrashRootItems(items) {
 }
 
 function getDescendantsByPath(items, rootPath, field = 'path') {
-  return items.filter(
-    (item) => item[field] === rootPath || item[field].startsWith(`${rootPath}/`),
-  )
+  return items.filter((item) => item[field] === rootPath || item[field].startsWith(`${rootPath}/`))
+}
+
+function collectLocalStorageSummary(items) {
+  const activeItems = items.filter((item) => !item.deletedAt)
+  const files = activeItems.filter((item) => item.type === 'file')
+  const folders = activeItems.filter((item) => item.type === 'folder')
+  const usedBytes = files.reduce((total, item) => total + item.size, 0)
+
+  return {
+    drive: {
+      root: '/dev-drive',
+      usedBytes,
+      fileCount: files.length,
+      folderCount: folders.length,
+    },
+    disk: {
+      mount: '/',
+      totalBytes: 0,
+      usedBytes: 0,
+      freeBytes: 0,
+      usedPercent: 0,
+    },
+  }
+}
+
+async function collectServerItems() {
+  const items = []
+  const queue = ['/']
+
+  while (queue.length) {
+    const currentPath = queue.shift()
+    const response = await apiClient.listItems(currentPath)
+    const pageItems = sortDriveItems((response.items || []).map(adaptApiItem))
+
+    pageItems.forEach((item) => {
+      items.push(item)
+      if (item.type === 'folder') {
+        queue.push(item.path)
+      }
+    })
+  }
+
+  return sortDriveItems(items)
 }
 
 export function DriveProvider({ children }) {
   const [localItems, setLocalItems] = useState(loadLocalItems)
   const [serverItems, setServerItems] = useState([])
   const [trashItems, setTrashItems] = useState([])
-  const [mode, setMode] = useState(isApiConfigured ? 'checking' : 'local')
+  const [shares, setShares] = useState([])
+  const [storageSummary, setStorageSummary] = useState(collectLocalStorageSummary(loadLocalItems()))
+  const [isSyncing, setIsSyncing] = useState(false)
+  const [authState, setAuthState] = useState(
+    isApiConfigured
+      ? { status: 'checking', authenticated: false, passwordConfigured: true, error: '' }
+      : { status: 'authenticated', authenticated: true, passwordConfigured: false, error: '' },
+  )
   const [backend, setBackend] = useState({
     apiBaseUrl: configuredApiBaseUrl || '',
     app: 'Farros Drive',
     configured: isApiConfigured,
-    connected: false,
+    connected: !isApiConfigured,
     error: '',
-    mode: 'localStorage',
+    mode: isApiConfigured ? 'server' : 'localStorage',
     resolvedApiBaseUrl: resolvedApiBaseUrl || '',
-    statusLabel: isApiConfigured ? 'Memeriksa server' : 'Mode simulasi',
-    storageRoot: '-',
-    version: 'phase-1',
+    statusLabel: isApiConfigured ? 'Menghubungkan' : 'Mode lokal',
+    storageRoot: isApiConfigured ? '-' : '/dev-drive',
+    version: 'phase-3',
   })
-  const [isSyncing, setIsSyncing] = useState(false)
+
+  const currentMode = isApiConfigured ? 'server' : 'localStorage'
 
   const commitLocalItems = (updater) => {
     setLocalItems((currentItems) => {
-      const nextItems = (typeof updater === 'function' ? updater(currentItems) : updater).map(
-        normalizeLocalItem,
-      )
-
+      const nextItems = (typeof updater === 'function' ? updater(currentItems) : updater).map(normalizeLocalItem)
       persistLocalItems(nextItems)
+      setStorageSummary(collectLocalStorageSummary(nextItems))
       return nextItems
     })
   }
 
-  const refreshServerSnapshot = useCallback(async (healthPayload = null) => {
+  const refreshServerData = useCallback(async (healthPayload = null) => {
+    if (!isApiConfigured) {
+      return
+    }
+
     setIsSyncing(true)
 
     try {
-      const collectedItems = []
-      const queue = ['/']
+      const currentHealth = healthPayload || (await apiClient.getHealth())
+      const [items, trashResponse, shareResponse, storageResponse] = await Promise.all([
+        collectServerItems(),
+        apiClient.listTrash(),
+        apiClient.listShares(),
+        apiClient.getStorage(),
+      ])
 
-      while (queue.length) {
-        const currentPath = queue.shift()
-        const response = await apiClient.listItems(currentPath)
-
-        for (const rawItem of response.items || []) {
-          const item = adaptApiItem(rawItem)
-          collectedItems.push(item)
-
-          if (item.type === 'folder') {
-            queue.push(item.path)
-          }
-        }
-      }
-
-      const trashResponse = await apiClient.listTrash()
-      const normalizedTrashItems = (trashResponse.items || []).map(adaptApiItem)
-
-      setServerItems(sortDriveItems(collectedItems))
-      setTrashItems(toTrashRootItems(normalizedTrashItems))
-      setMode('server')
+      setServerItems(items)
+      setTrashItems(sortDriveItems((trashResponse.items || []).map(adaptApiItem)))
+      setShares((shareResponse.shares || []).map(adaptShareItem))
+      setStorageSummary(storageResponse)
       setBackend((current) => ({
         ...current,
-        app: healthPayload?.app || current.app,
+        app: currentHealth.app || current.app,
         connected: true,
         error: '',
         mode: 'server',
-        statusLabel: 'Tersambung ke server',
-        storageRoot: healthPayload?.storageRoot || current.storageRoot,
-        version: healthPayload?.version || current.version,
+        resolvedApiBaseUrl: resolvedApiBaseUrl || '',
+        statusLabel: 'Online',
+        storageRoot: currentHealth.storageRoot || current.storageRoot,
+        version: currentHealth.version || current.version,
       }))
+    } catch (error) {
+      if (error.status === 401) {
+        setAuthState((current) => ({
+          ...current,
+          authenticated: false,
+          status: 'unauthenticated',
+        }))
+        setServerItems([])
+        setTrashItems([])
+        setShares([])
+        return
+      }
+
+      setBackend((current) => ({
+        ...current,
+        connected: false,
+        error: error.message,
+        statusLabel: 'Backend bermasalah',
+      }))
+      throw error
     } finally {
       setIsSyncing(false)
     }
   }, [])
 
   useEffect(() => {
-    if (mode !== 'server') {
-      setTrashItems(toTrashRootItems(localItems))
-    }
-  }, [localItems, mode])
-
-  useEffect(() => {
     if (!isApiConfigured) {
-      return
+      setTrashItems(toTrashRootItems(localItems))
+      setStorageSummary(collectLocalStorageSummary(localItems))
+      return undefined
     }
 
     let cancelled = false
 
-    const connectToServer = async () => {
-      setIsSyncing(true)
-
+    const bootstrap = async () => {
       try {
         const healthPayload = await apiClient.getHealth()
         if (cancelled) {
           return
         }
 
-        await refreshServerSnapshot(healthPayload)
+        setBackend((current) => ({
+          ...current,
+          app: healthPayload.app || current.app,
+          connected: true,
+          error: '',
+          statusLabel: 'Online',
+          storageRoot: healthPayload.storageRoot || current.storageRoot,
+          version: healthPayload.version || current.version,
+        }))
+
+        const me = await apiClient.getAuthMe()
+        if (cancelled) {
+          return
+        }
+
+        setAuthState({
+          status: me.authenticated ? 'authenticated' : 'unauthenticated',
+          authenticated: Boolean(me.authenticated),
+          passwordConfigured: Boolean(me.passwordConfigured),
+          error: '',
+        })
+
+        if (me.authenticated) {
+          await refreshServerData(healthPayload)
+        }
       } catch (error) {
         if (cancelled) {
           return
         }
 
-        setMode('local')
         setBackend((current) => ({
           ...current,
           connected: false,
           error: error.message,
-          mode: 'localStorage',
-          statusLabel: 'Mode simulasi',
-          storageRoot: '-',
-          version: 'phase-1',
+          statusLabel: 'Backend tidak tersedia',
         }))
-      } finally {
-        if (!cancelled) {
-          setIsSyncing(false)
-        }
+        setAuthState((current) => ({
+          ...current,
+          status: 'unauthenticated',
+          error: error.message,
+        }))
       }
     }
 
-    connectToServer()
+    bootstrap()
 
     return () => {
       cancelled = true
     }
-  }, [refreshServerSnapshot])
+  }, [localItems, refreshServerData])
 
-  const activeItems = mode === 'server' ? serverItems : localItems.filter((item) => !item.deletedAt)
-  const currentTrashItems = mode === 'server' ? trashItems : toTrashRootItems(localItems)
+  const activeItems = isApiConfigured ? serverItems : localItems.filter((item) => !item.deletedAt)
+  const currentTrashItems = isApiConfigured ? trashItems : toTrashRootItems(localItems)
 
   const createFolder = async (name, parentPath = '/') => {
     const sanitizedName = sanitizeLocalName(name)
@@ -252,13 +351,12 @@ export function DriveProvider({ children }) {
       return null
     }
 
-    if (mode === 'server') {
+    if (isApiConfigured) {
       const item = await apiClient.createFolder({
         path: normalizeVirtualPath(parentPath),
         name: sanitizedName,
       })
-
-      await refreshServerSnapshot()
+      await refreshServerData()
       return adaptApiItem(item)
     }
 
@@ -273,11 +371,7 @@ export function DriveProvider({ children }) {
       size: 0,
       path: itemPath,
       parentPath: getParentPath(itemPath),
-      createdAt: timestamp,
       updatedAt: timestamp,
-      deletedAt: null,
-      trashPath: '',
-      originalPath: '',
     })
 
     commitLocalItems((currentItems) => [...currentItems, folder])
@@ -289,9 +383,9 @@ export function DriveProvider({ children }) {
       return []
     }
 
-    if (mode === 'server') {
+    if (isApiConfigured) {
       const response = await apiClient.uploadFiles(normalizeVirtualPath(parentPath), files)
-      await refreshServerSnapshot()
+      await refreshServerData()
       return (response.items || []).map(adaptApiItem)
     }
 
@@ -309,11 +403,7 @@ export function DriveProvider({ children }) {
         size: file.size,
         path: itemPath,
         parentPath: getParentPath(itemPath),
-        createdAt: timestamp,
         updatedAt: timestamp,
-        deletedAt: null,
-        trashPath: '',
-        originalPath: '',
       })
 
       existingItems.push(item)
@@ -330,12 +420,12 @@ export function DriveProvider({ children }) {
       return false
     }
 
-    if (mode === 'server') {
+    if (isApiConfigured) {
       await apiClient.renameItem({
         path: normalizeVirtualPath(itemPath),
         newName: sanitizedName,
       })
-      await refreshServerSnapshot()
+      await refreshServerData()
       return true
     }
 
@@ -375,11 +465,9 @@ export function DriveProvider({ children }) {
   }
 
   const moveToTrash = async (itemPath) => {
-    if (mode === 'server') {
-      await apiClient.moveToTrash({
-        path: normalizeVirtualPath(itemPath),
-      })
-      await refreshServerSnapshot()
+    if (isApiConfigured) {
+      await apiClient.moveToTrash({ path: normalizeVirtualPath(itemPath) })
+      await refreshServerData()
       return
     }
 
@@ -423,12 +511,12 @@ export function DriveProvider({ children }) {
     const normalizedTrashPath = normalizeVirtualPath(trashPath)
     const normalizedRestorePath = restorePath ? normalizeVirtualPath(restorePath) : ''
 
-    if (mode === 'server') {
+    if (isApiConfigured) {
       await apiClient.restoreTrash({
         trashPath: normalizedTrashPath,
         restorePath: normalizedRestorePath,
       })
-      await refreshServerSnapshot()
+      await refreshServerData()
       return
     }
 
@@ -472,46 +560,47 @@ export function DriveProvider({ children }) {
   const deleteForever = async (trashPath) => {
     const normalizedTrashPath = normalizeVirtualPath(trashPath)
 
-    if (mode === 'server') {
-      await apiClient.deleteForever({
-        trashPath: normalizedTrashPath,
-      })
-      await refreshServerSnapshot()
+    if (isApiConfigured) {
+      await apiClient.deleteForever({ trashPath: normalizedTrashPath })
+      await refreshServerData()
       return
     }
 
     commitLocalItems((currentItems) =>
       currentItems.filter(
-        (item) =>
-          item.trashPath !== normalizedTrashPath &&
-          !item.trashPath.startsWith(`${normalizedTrashPath}/`),
+        (item) => item.trashPath !== normalizedTrashPath && !item.trashPath.startsWith(`${normalizedTrashPath}/`),
       ),
     )
   }
 
+  const createShare = async (payload) => {
+    const response = await apiClient.createShare(payload)
+    await refreshServerData()
+    return response
+  }
+
+  const revokeShare = async (token) => {
+    await apiClient.deleteShare({ token })
+    await refreshServerData()
+  }
+
   const getItemsByPath = (parentPath = '/') =>
-    sortDriveItems(
-      activeItems.filter((item) => item.parentPath === normalizeVirtualPath(parentPath)),
-    )
+    sortDriveItems(activeItems.filter((item) => item.parentPath === normalizeVirtualPath(parentPath)))
 
   const getItemByPath = (itemPath) => {
     const normalizedPath = normalizeVirtualPath(itemPath)
     return (
       activeItems.find((item) => item.path === normalizedPath) ||
-      currentTrashItems.find(
-        (item) => item.trashPath === normalizedPath || item.path === normalizedPath,
-      ) ||
+      currentTrashItems.find((item) => item.trashPath === normalizedPath || item.path === normalizedPath) ||
       null
     )
   }
 
-  const getRecentItems = (limit = 8) =>
+  const getRecentItems = (limit = 12) =>
     activeItems
       .filter((item) => item.type === 'file')
       .sort((left, right) => new Date(right.updatedAt) - new Date(left.updatedAt))
       .slice(0, limit)
-
-  const getTrashItems = () => currentTrashItems
 
   const searchItems = (keyword, parentPath = '/') => {
     const query = keyword.trim().toLowerCase()
@@ -524,54 +613,103 @@ export function DriveProvider({ children }) {
     return scopedItems.filter((item) => item.name.toLowerCase().includes(query))
   }
 
-  const getStorageSummary = () => {
-    const files = activeItems.filter((item) => item.type === 'file')
-    const folders = activeItems.filter((item) => item.type === 'folder')
-    const usedBytes = files.reduce((total, item) => total + item.size, 0)
-    const latestFile = [...files].sort((left, right) => new Date(right.updatedAt) - new Date(left.updatedAt))[0]
+  const refreshAuth = async () => {
+    if (!isApiConfigured) {
+      return
+    }
 
-    return {
-      fileCount: files.length,
-      folderCount: folders.length,
-      usedBytes,
-      capacityBytes: CAPACITY_BYTES,
-      remainingBytes: Math.max(CAPACITY_BYTES - usedBytes, 0),
-      recentFileName: latestFile?.name || '-',
+    const me = await apiClient.getAuthMe()
+    setAuthState({
+      status: me.authenticated ? 'authenticated' : 'unauthenticated',
+      authenticated: Boolean(me.authenticated),
+      passwordConfigured: Boolean(me.passwordConfigured),
+      error: '',
+    })
+
+    if (me.authenticated) {
+      await refreshServerData()
     }
   }
 
+  const login = async (password) => {
+    await apiClient.login(password)
+    await refreshAuth()
+  }
+
+  const logout = async () => {
+    if (isApiConfigured) {
+      await apiClient.logout()
+    }
+
+    setAuthState((current) => ({
+      ...current,
+      authenticated: false,
+      status: isApiConfigured ? 'unauthenticated' : 'authenticated',
+    }))
+    setServerItems([])
+    setTrashItems([])
+    setShares([])
+  }
+
   const refreshData = async () => {
-    if (mode === 'server') {
-      const healthPayload = await apiClient.getHealth()
-      await refreshServerSnapshot(healthPayload)
+    if (isApiConfigured) {
+      await refreshServerData()
       return
     }
 
     setTrashItems(toTrashRootItems(localItems))
+    setStorageSummary(collectLocalStorageSummary(localItems))
+  }
+
+  const loadPublicShare = async (token, itemPath = '/') => {
+    const response = await apiClient.getPublicShare(token, itemPath)
+
+    return {
+      ...response,
+      currentPath: normalizeVirtualPath(response.currentPath || '/'),
+      item: response.item ? adaptPublicItem(response.item) : null,
+      items: (response.items || []).map(adaptPublicItem),
+    }
   }
 
   const store = {
     activeItems,
     addFiles,
+    auth: authState,
     backend,
+    buildBreadcrumbItems,
     createFolder,
-    currentMode: mode === 'server' ? 'server' : 'localStorage',
+    createShare,
+    currentMode,
     deleteForever,
     downloadUrlForPath: getDownloadUrl,
     getItemByPath,
     getItemsByPath,
+    getPreviewUrlForPath: getPreviewUrl,
     getRecentItems,
-    getStorageSummary,
-    getTrashItems,
-    isServerMode: mode === 'server',
+    getStorageSummary: () => storageSummary,
+    getTrashItems: () => currentTrashItems,
+    isApiConfigured,
+    isReady: !isApiConfigured || authState.status !== 'checking',
+    isServerMode: isApiConfigured,
     isSyncing,
     items: activeItems,
+    loadPublicShare,
+    login,
+    logout,
     moveToTrash,
+    previewText: apiClient.fetchPreviewText,
+    previewTextPublic: apiClient.fetchPublicPreviewText,
+    publicDownloadUrlForPath: apiClient.getPublicDownloadUrl,
+    publicPreviewUrlForPath: apiClient.getPublicPreviewUrl,
+    refreshAuth,
     refreshData,
     renameItem,
     resolvedApiBaseUrl: resolvedApiBaseUrl || '',
     restoreItem,
+    revokeShare,
     searchItems,
+    shares,
     trashItems: currentTrashItems,
   }
 

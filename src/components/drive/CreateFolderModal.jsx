@@ -21,7 +21,7 @@ function CreateFolderModal({ open, onClose, onSubmit }) {
       open={open}
       onClose={handleClose}
       title="Buat Folder"
-      description="Siapkan struktur direktori baru untuk simulasi drive."
+      description="Folder baru"
     >
       <form className="space-y-4" onSubmit={handleSubmit}>
         <div className="space-y-2">

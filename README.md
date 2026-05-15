@@ -1,17 +1,15 @@
 # Farros Drive
 
-Farros Drive adalah mini drive pribadi untuk pertukaran berkas antara laptop, HP, dan server Farros. Frontend dibangun dengan React + Vite + Tailwind, sedangkan backend fase 2 memakai Go dan langsung membaca storage terpisah di luar folder aplikasi.
+Farros Drive adalah drive pribadi ringan berbasis Go + React. Storage asli tetap berada di luar aplikasi, default local dev di `dev-drive/` dan production di `/srv/drive`.
 
 ## Stack
 
-- React
-- Vite
-- Tailwind CSS
-- lucide-react
-- SweetAlert2
-- Go standard library
+- Backend: Go
+- Frontend: React + Vite + Tailwind
+- Metadata share: JSON file di `/srv/drive/.farros-drive/shares.json`
+- Auth: single password via cookie session tanpa database
 
-## Struktur Aplikasi
+## Struktur
 
 ```text
 src/                  frontend React
@@ -19,27 +17,48 @@ server/               backend Go API
 dev-drive/            storage local development
 ```
 
-Struktur backend utama:
+## Password
 
-```text
-server/
-  cmd/farros-drive/
-  internal/config/
-  internal/drive/
-  internal/httpapi/
-  internal/security/
+Backend memakai environment variable:
+
+```bash
+FARROS_DRIVE_PASSWORD=isi_password_anda
 ```
+
+Catatan:
+
+- Jika kosong, backend tetap bisa jalan.
+- Saat kosong, UI akan memberi peringatan bahwa password belum disetel.
+- Untuk production, password harus disetel.
+- Jangan commit password ke repo.
 
 ## Menjalankan Frontend
 
+Install dependency:
+
 ```bash
 npm install
+```
+
+Development:
+
+```bash
 npm run dev
 ```
 
-Frontend akan memakai backend Go jika `VITE_API_BASE_URL` tersedia. Contoh konfigurasi ada di `.env.example`.
+Frontend akan memakai backend jika `VITE_API_BASE_URL` disetel. Contoh local dev:
 
-Command verifikasi frontend:
+```bash
+VITE_API_BASE_URL=http://127.0.0.1:8085/api
+```
+
+Production:
+
+```bash
+VITE_API_BASE_URL=/api
+```
+
+Validasi frontend:
 
 ```bash
 npm run lint
@@ -54,35 +73,73 @@ go mod tidy
 go run ./cmd/farros-drive
 ```
 
-Backend listen default di `http://127.0.0.1:8085`.
+Build binary:
 
-Environment variable yang dipakai:
-
-- `DRIVE_ROOT` default `../dev-drive`
-- `DRIVE_TRASH_DIR` default `.trash`
-- `DRIVE_PORT` default `8085`
-- `DRIVE_MAX_UPLOAD_MB` default `100`
-
-## Lokasi Storage Local Dev
-
-Storage local development ada di:
-
-```text
-dev-drive/
+```bash
+go build -o farros-drive ./cmd/farros-drive
 ```
 
-Folder `.trash/` di dalam `dev-drive/` dipakai untuk item yang dipindahkan dari UI sebelum dihapus permanen.
+Default environment backend:
 
-## Catatan Production
+- `DRIVE_ROOT=../dev-drive`
+- `DRIVE_TRASH_DIR=.trash`
+- `DRIVE_META_DIR=.farros-drive`
+- `DRIVE_PORT=8085`
+- `DRIVE_MAX_UPLOAD_MB=100`
+- `FARROS_DRIVE_PASSWORD=...`
 
-- Source app / web panel: `/opt/farros-drive`
-- Storage file asli: `/srv/drive`
-- Domain target: `drive.farros.space`
+## Deploy Production
 
-File asli tidak disimpan di `src/`, `public/`, atau folder backend. Storage tetap terpisah agar tetap nyaman dikelola dari CLI.
+Contoh target production:
 
-## Catatan Keamanan
+- Source repo / build workspace: `/srv/websites/farros-drive`
+- App frontend hasil build: `/opt/farros-drive/public`
+- Backend binary / app: `/opt/farros-drive`
+- Storage asli: `/srv/drive`
+- Backend bind: `127.0.0.1:8085`
 
-- Fase ini belum memiliki login / auth.
-- Jangan buka aplikasi ini ke publik tanpa proteksi akses tambahan.
-- Backend menolak path traversal dan akses langsung ke hidden path selain endpoint trash.
+Langkah umum:
+
+1. Build frontend dengan `npm run build`.
+2. Build backend dengan `go build -o farros-drive ./cmd/farros-drive`.
+3. Salin aset frontend ke `/opt/farros-drive/public`.
+4. Jalankan binary backend sebagai service.
+5. Pastikan Nginx mengarahkan `/api` ke backend Go dan SPA route memakai `try_files $uri $uri/ /index.html;`.
+6. Set `FARROS_DRIVE_PASSWORD` di systemd service.
+
+Contoh systemd env:
+
+```ini
+Environment=FARROS_DRIVE_PASSWORD=ubah_password_ini
+Environment=DRIVE_ROOT=/srv/drive
+```
+
+## Fitur
+
+- Login single password dengan cookie session 7 hari
+- List item, upload, folder, rename, trash, restore, delete forever
+- Preview gambar, PDF, video, audio, dan teks
+- Share publik read-only untuk file atau folder
+- Summary storage `/srv/drive` dan disk CT
+
+## Public Share
+
+Public share bersifat read-only:
+
+- Bisa lihat
+- Bisa preview
+- Bisa download jika diizinkan
+
+Public share tidak bisa:
+
+- Upload
+- Rename
+- Delete
+- Restore
+- Buat folder
+
+## Catatan
+
+- File asli tidak disimpan di `src/`, `public/`, atau `server/`.
+- Folder `.trash` dan `.farros-drive` disembunyikan dari list drive biasa.
+- Share publik disimpan di file JSON, belum memakai database.

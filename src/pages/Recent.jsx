@@ -1,160 +1,100 @@
-import { Filter, History } from 'lucide-react'
-import { useMemo, useState } from 'react'
-import Swal from 'sweetalert2'
-import FileDetailModal from '../components/drive/FileDetailModal'
-import FileRow from '../components/drive/FileRow'
+import { Eye, FileClock, Link2, Pencil, Trash2 } from 'lucide-react'
+import { useState } from 'react'
+import FilePreviewModal from '../components/drive/FilePreviewModal'
 import RenameModal from '../components/drive/RenameModal'
-import Badge from '../components/ui/Badge'
+import ShareModal from '../components/drive/ShareModal'
 import EmptyState from '../components/ui/EmptyState'
 import { useDriveStore } from '../hooks/useDriveStore'
-import { getFileCategory } from '../lib/fileUtils'
-
-const filters = [
-  { key: 'semua', label: 'Semua' },
-  { key: 'dokumen', label: 'Dokumen' },
-  { key: 'gambar', label: 'Gambar' },
-  { key: 'arsip', label: 'Arsip' },
-  { key: 'sql', label: 'SQL' },
-  { key: 'excel', label: 'Excel' },
-  { key: 'lainnya', label: 'Lainnya' },
-]
+import { formatBytes, formatDateTime } from '../lib/formatters'
 
 function Recent() {
-  const { downloadUrlForPath, getRecentItems, isServerMode, moveToTrash, renameItem } = useDriveStore()
-  const [activeFilter, setActiveFilter] = useState('semua')
+  const {
+    createShare,
+    downloadUrlForPath,
+    getPreviewUrlForPath,
+    getRecentItems,
+    isServerMode,
+    moveToTrash,
+    previewText,
+    renameItem,
+    revokeShare,
+    shares,
+  } = useDriveStore()
+  const [previewTarget, setPreviewTarget] = useState(null)
   const [renameTarget, setRenameTarget] = useState(null)
-  const [detailTarget, setDetailTarget] = useState(null)
+  const [shareTarget, setShareTarget] = useState(null)
 
-  const items = useMemo(() => {
-    const recentItems = getRecentItems(20)
-
-    if (activeFilter === 'semua') {
-      return recentItems
-    }
-
-    return recentItems.filter((item) => getFileCategory(item) === activeFilter)
-  }, [activeFilter, getRecentItems])
+  const items = getRecentItems(20)
 
   const handleDelete = async (item) => {
-    const result = await Swal.fire({
-      title: `Pindahkan "${item.name}" ke Sampah?`,
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonColor: '#0c253b',
-      confirmButtonText: 'Pindahkan',
-      cancelButtonText: 'Batal',
-    })
-
-    if (result.isConfirmed) {
-      await moveToTrash(item.path)
-      await Swal.fire({
-        title: 'Item dipindahkan',
-        icon: 'success',
-        confirmButtonColor: '#0c253b',
-      })
-    }
-  }
-
-  const handleRename = async (name) => {
-    if (!renameTarget) {
+    if (!window.confirm(`Pindahkan "${item.name}" ke Sampah?`)) {
       return
     }
 
-    if (!name.trim()) {
-      await Swal.fire({
-        title: 'Nama baru wajib diisi',
-        icon: 'error',
-        confirmButtonColor: '#0c253b',
-      })
+    await moveToTrash(item.path)
+  }
+
+  const handleRename = async (name) => {
+    if (!renameTarget || !name.trim()) {
       return
     }
 
     await renameItem(renameTarget.path, name)
     setRenameTarget(null)
-    await Swal.fire({
-      title: 'Berkas berhasil di-rename',
-      icon: 'success',
-      confirmButtonColor: '#0c253b',
-    })
   }
 
-  const handleDownload = async (item) => {
-    if (isServerMode) {
-      const url = downloadUrlForPath(item.path)
-
-      if (url) {
-        window.open(url, '_blank', 'noopener,noreferrer')
-        return
-      }
-    }
-
-    await Swal.fire({
-      title: 'Download dummy',
-      text: `${item.name} belum diunduh sungguhan.`,
-      icon: 'success',
-      confirmButtonColor: '#0c253b',
-    })
+  if (!items.length) {
+    return <EmptyState icon={FileClock} title="Belum ada file" description="File terbaru akan muncul di sini." />
   }
 
   return (
-    <div className="space-y-6">
-      <div className="panel-surface p-5">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2 text-sm font-semibold text-farros-ink">
-            <Filter size={16} />
-            <span>Filter tipe file</span>
-          </div>
-          {filters.map((filter) => (
-            <button
-              key={filter.key}
-              type="button"
-              onClick={() => setActiveFilter(filter.key)}
-              className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
-                activeFilter === filter.key
-                  ? 'bg-farros-navy text-farros-ivory'
-                  : 'bg-farros-mist text-farros-ink hover:bg-farros-sage/30'
-              }`}
-            >
-              {filter.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {items.length ? (
-        <div className="space-y-3">
-          {items.map((item, index) => (
-            <div key={item.id} className="space-y-2">
-              {index === 0 ? <Badge variant="success">Paling baru</Badge> : null}
-              <FileRow
-                item={item}
-                onDetail={() => setDetailTarget(item)}
-                onRename={() => setRenameTarget(item)}
-                onDownload={() => handleDownload(item)}
-                onDelete={() => handleDelete(item)}
-              />
+    <div className="space-y-3">
+      {items.map((item) => (
+        <div key={item.id} className="rounded-[24px] border border-black/5 bg-white/82 px-4 py-4 shadow-sm">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="min-w-0">
+              <p className="truncate font-semibold text-farros-navy">{item.name}</p>
+              <p className="truncate text-sm text-farros-ink">{item.path}</p>
+              <div className="mt-2 flex flex-wrap gap-4 text-xs text-farros-ink">
+                <span>{formatBytes(item.size)}</span>
+                <span>{formatDateTime(item.updatedAt)}</span>
+              </div>
             </div>
-          ))}
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={() => setPreviewTarget(item)} className="rounded-2xl bg-farros-mist p-2.5 text-farros-navy">
+                <Eye size={16} />
+              </button>
+              <button type="button" onClick={() => setShareTarget(item)} className="rounded-2xl bg-farros-mist p-2.5 text-farros-navy">
+                <Link2 size={16} />
+              </button>
+              <button type="button" onClick={() => setRenameTarget(item)} className="rounded-2xl bg-farros-mist p-2.5 text-farros-navy">
+                <Pencil size={16} />
+              </button>
+              <button type="button" onClick={() => handleDelete(item)} className="rounded-2xl bg-red-50 p-2.5 text-red-600">
+                <Trash2 size={16} />
+              </button>
+            </div>
+          </div>
         </div>
-      ) : (
-        <EmptyState
-          icon={History}
-          title="Belum ada file untuk filter ini"
-          description="Coba pilih filter lain atau unggah file baru ke simulasi drive."
-        />
-      )}
+      ))}
 
-      <RenameModal
-        key={renameTarget?.id}
-        item={renameTarget}
-        open={Boolean(renameTarget)}
-        onClose={() => setRenameTarget(null)}
-        onSubmit={handleRename}
+      <RenameModal item={renameTarget} open={Boolean(renameTarget)} onClose={() => setRenameTarget(null)} onSubmit={handleRename} />
+      <ShareModal
+        item={shareTarget}
+        open={Boolean(shareTarget)}
+        onClose={() => setShareTarget(null)}
+        onCreate={createShare}
+        onRevoke={revokeShare}
+        shares={shares}
       />
-      <FileDetailModal
-        item={detailTarget}
-        open={Boolean(detailTarget)}
-        onClose={() => setDetailTarget(null)}
+      <FilePreviewModal
+        item={previewTarget}
+        open={Boolean(previewTarget)}
+        onClose={() => setPreviewTarget(null)}
+        onShare={previewTarget ? () => setShareTarget(previewTarget) : null}
+        previewUrl={previewTarget && isServerMode ? getPreviewUrlForPath(previewTarget.path) : null}
+        downloadUrl={previewTarget && isServerMode ? downloadUrlForPath(previewTarget.path) : null}
+        loadText={isServerMode ? previewText : async () => 'Preview tersedia saat backend aktif.'}
       />
     </div>
   )
