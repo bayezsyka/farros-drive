@@ -14,7 +14,7 @@ import { useDriveStore } from '../hooks/useDriveStore'
 import { formatBytes, formatRelativeTime } from '../lib/formatters'
 
 function Dashboard() {
-  const { getRecentItems, getStorageSummary } = useDriveStore()
+  const { backend, currentMode, getRecentItems, getStorageSummary } = useDriveStore()
   const recentItems = getRecentItems(5)
   const summary = getStorageSummary()
 
@@ -24,11 +24,17 @@ function Dashboard() {
         <Card className="overflow-hidden p-6 sm:p-8">
           <div className="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-2xl">
-              <Badge variant="success">Farros Drive</Badge>
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="success">Farros Drive</Badge>
+                <Badge variant={backend.connected ? 'success' : 'neutral'}>
+                  {backend.connected ? 'Tersambung ke server' : 'Mode simulasi'}
+                </Badge>
+              </div>
               <h1 className="section-title mt-4">Kelola berkas server pribadi dari satu tampilan yang rapi.</h1>
               <p className="mt-4 max-w-xl text-sm leading-7 text-farros-ink sm:text-base">
-                Fase ini fokus pada simulasi frontend untuk alur pertukaran file laptop, HP, dan server
-                Proxmox/CT. Struktur UI sudah disiapkan agar mudah dihubungkan ke backend Go nanti.
+                {backend.connected
+                  ? 'Farros Drive sudah membaca storage nyata untuk local development melalui backend Go, sambil tetap mempertahankan alur UI yang rapi.'
+                  : 'Fase ini fokus pada simulasi frontend untuk alur pertukaran file laptop, HP, dan server Proxmox/CT. Struktur UI sudah disiapkan agar mudah dihubungkan ke backend Go nanti.'}
               </p>
             </div>
             <div className="flex flex-wrap gap-3">
@@ -56,19 +62,19 @@ function Dashboard() {
           icon={FilesIcon}
           label="Total Berkas"
           value={summary.fileCount}
-          note="File aktif di simulasi drive"
+          note={currentMode === 'server' ? 'File aktif dari storage server' : 'File aktif di simulasi drive'}
         />
         <StatCard
           icon={FolderKanban}
           label="Total Folder"
           value={summary.folderCount}
-          note="Folder aktif siap dinavigasi"
+          note={currentMode === 'server' ? 'Folder aktif dari storage server' : 'Folder aktif siap dinavigasi'}
         />
         <StatCard
           icon={HardDrive}
           label="Total Ukuran"
           value={formatBytes(summary.usedBytes)}
-          note="Akumulasi ukuran file dummy"
+          note={currentMode === 'server' ? 'Akumulasi file di storage server' : 'Akumulasi ukuran file dummy'}
         />
         <StatCard
           icon={Sparkles}
@@ -116,8 +122,9 @@ function Dashboard() {
             <p className="mt-3 font-mono text-lg">/srv/drive</p>
           </div>
           <p className="mt-5 text-sm leading-6 text-farros-ink">
-            Panel web akan ditempatkan terpisah di `/opt/farros-drive` dan terhubung ke backend Go pada fase
-            berikutnya.
+            {backend.connected
+              ? `Panel frontend tetap terpisah dari storage. Backend saat ini membaca root ${backend.storageRoot}.`
+              : 'Panel web akan ditempatkan terpisah di `/opt/farros-drive` dan terhubung ke backend Go pada fase berikutnya.'}
           </p>
           <Link to="/drive/files" className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-farros-navy">
             Buka area berkas

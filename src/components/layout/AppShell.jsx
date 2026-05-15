@@ -25,7 +25,7 @@ const routeCopy = {
   },
   '/drive/files': {
     title: 'Berkas',
-    description: 'Navigasi folder, unggah file simulasi, dan siapkan struktur untuk backend Go.',
+    description: 'Navigasi folder, unggah file, dan kelola storage server atau fallback simulasi dari satu UI.',
   },
   '/drive/recent': {
     title: 'Terbaru',
@@ -37,7 +37,7 @@ const routeCopy = {
   },
   '/drive/settings': {
     title: 'Pengaturan',
-    description: 'Ringkasan konfigurasi dummy menuju instalasi Farros Drive di lingkungan server.',
+    description: 'Ringkasan mode backend, root storage aktif, dan arah instalasi Farros Drive di lingkungan server.',
   },
 }
 

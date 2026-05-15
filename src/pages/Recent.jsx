@@ -20,7 +20,7 @@ const filters = [
 ]
 
 function Recent() {
-  const { getRecentItems, moveToTrash, renameItem } = useDriveStore()
+  const { downloadUrlForPath, getRecentItems, isServerMode, moveToTrash, renameItem } = useDriveStore()
   const [activeFilter, setActiveFilter] = useState('semua')
   const [renameTarget, setRenameTarget] = useState(null)
   const [detailTarget, setDetailTarget] = useState(null)
@@ -46,7 +46,7 @@ function Recent() {
     })
 
     if (result.isConfirmed) {
-      moveToTrash(item.id)
+      await moveToTrash(item.path)
       await Swal.fire({
         title: 'Item dipindahkan',
         icon: 'success',
@@ -69,7 +69,7 @@ function Recent() {
       return
     }
 
-    renameItem(renameTarget.id, name)
+    await renameItem(renameTarget.path, name)
     setRenameTarget(null)
     await Swal.fire({
       title: 'Berkas berhasil di-rename',
@@ -79,6 +79,15 @@ function Recent() {
   }
 
   const handleDownload = async (item) => {
+    if (isServerMode) {
+      const url = downloadUrlForPath(item.path)
+
+      if (url) {
+        window.open(url, '_blank', 'noopener,noreferrer')
+        return
+      }
+    }
+
     await Swal.fire({
       title: 'Download dummy',
       text: `${item.name} belum diunduh sungguhan.`,

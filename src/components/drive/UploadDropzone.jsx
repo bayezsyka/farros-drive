@@ -1,10 +1,12 @@
 import { UploadCloud } from 'lucide-react'
 import { useRef, useState } from 'react'
+import { useDriveStore } from '../../hooks/useDriveStore'
 import Badge from '../ui/Badge'
 import Button from '../ui/Button'
 import Card from '../ui/Card'
 
 function UploadDropzone({ onFiles, inputRef: externalInputRef }) {
+  const { backend, isServerMode } = useDriveStore()
   const localInputRef = useRef(null)
   const inputRef = externalInputRef || localInputRef
   const [isDragging, setIsDragging] = useState(false)
@@ -34,16 +36,22 @@ function UploadDropzone({ onFiles, inputRef: externalInputRef }) {
           <UploadCloud size={28} />
         </div>
         <div className="space-y-2">
-          <h3 className="text-lg font-semibold text-farros-navy">Upload simulasi ke Farros Drive</h3>
+          <h3 className="text-lg font-semibold text-farros-navy">
+            {isServerMode ? 'Upload langsung ke storage server' : 'Upload simulasi ke Farros Drive'}
+          </h3>
           <p className="max-w-xl text-sm leading-6 text-farros-ink">
-            Drag &amp; drop file dari laptop atau HP, lalu metadata file akan disimpan ke state lokal.
+            {isServerMode
+              ? 'Drag & drop file dari laptop atau HP, lalu file akan disimpan ke storage aktif sesuai backend Go.'
+              : 'Drag & drop file dari laptop atau HP, lalu metadata file akan disimpan ke state lokal.'}
           </p>
         </div>
         <div className="flex flex-wrap items-center justify-center gap-3">
           <Button variant="secondary" onClick={() => inputRef.current?.click()}>
             Pilih Berkas
           </Button>
-          <Badge>Simulasi lokal, belum tersimpan ke /srv/drive</Badge>
+          <Badge variant={backend.connected ? 'success' : 'neutral'}>
+            {backend.connected ? `Tersambung ke ${backend.storageRoot}` : 'Simulasi lokal, belum tersimpan ke /srv/drive'}
+          </Badge>
         </div>
         <input
           ref={inputRef}

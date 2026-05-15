@@ -1,5 +1,5 @@
 import { FolderPlus, FolderSearch, Upload } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import Swal from 'sweetalert2'
 import Breadcrumb from '../components/drive/Breadcrumb'
@@ -15,15 +15,18 @@ import Button from '../components/ui/Button'
 import EmptyState from '../components/ui/EmptyState'
 import SearchInput from '../components/ui/SearchInput'
 import { useDriveStore } from '../hooks/useDriveStore'
-import { getBreadcrumbTrail } from '../lib/fileUtils'
+import { buildBreadcrumbItems, normalizeVirtualPath } from '../lib/driveAdapter'
 
 function Files() {
   const {
     addFiles,
+    backend,
     createFolder,
-    getItemById,
-    getItemsByParent,
-    items,
+    downloadUrlForPath,
+    getItemByPath,
+    getItemsByPath,
+    isServerMode,
+    isSyncing,
     moveToTrash,
     renameItem,
     searchItems,
@@ -36,24 +39,26 @@ function Files() {
   const [detailTarget, setDetailTarget] = useState(null)
   const uploadInputRef = useRef(null)
 
-  const currentFolderId = params.get('folder')
-  const currentFolder = currentFolderId ? getItemById(currentFolderId) : null
+  const currentPath = normalizeVirtualPath(params.get('path') || '/')
 
   useEffect(() => {
-    if (currentFolderId && (!currentFolder || currentFolder.deletedAt || currentFolder.type !== 'folder')) {
+    if (currentPath === '/' || isSyncing) {
+      return
+    }
+
+    const currentFolder = getItemByPath(currentPath)
+    if (!currentFolder || currentFolder.type !== 'folder') {
       setParams({})
     }
-  }, [currentFolder, currentFolderId, setParams])
+  }, [currentPath, getItemByPath, isSyncing, setParams])
 
-  const breadcrumbs = useMemo(
-    () => getBreadcrumbTrail(items, currentFolderId),
-    [items, currentFolderId],
-  )
-  const visibleItems = keyword
-    ? searchItems(keyword, currentFolderId)
-    : getItemsByParent(currentFolderId)
+  const breadcrumbs = buildBreadcrumbItems(currentPath)
+  const visibleItems = keyword ? searchItems(keyword, currentPath) : getItemsByPath(currentPath)
 
-  const openFolder = (folderId) => setParams({ folder: folderId })
+  const openFolder = (folderPath) => {
+    const normalizedTargetPath = folderPath ? normalizeVirtualPath(folderPath) : '/'
+    setParams(normalizedTargetPath === '/' ? {} : { path: normalizedTargetPath })
+  }
 
   const confirmTrash = async (item) => {
     const result = await Swal.fire({
@@ -68,7 +73,7 @@ function Files() {
     })
 
     if (result.isConfirmed) {
-      moveToTrash(item.id)
+      await moveToTrash(item.path)
       await Swal.fire({
         title: 'Berhasil dipindahkan',
         text: `${item.name} sekarang ada di area Sampah.`,
@@ -88,11 +93,13 @@ function Files() {
       return
     }
 
-    createFolder(name, currentFolderId)
+    await createFolder(name, currentPath)
     setIsCreateOpen(false)
     await Swal.fire({
       title: 'Folder berhasil dibuat',
-      text: `${name} sudah masuk ke simulasi drive.`,
+      text: backend.connected
+        ? `${name} sudah dibuat di storage server.`
+        : `${name} sudah masuk ke simulasi drive.`,
       icon: 'success',
       confirmButtonColor: '#0c253b',
     })
@@ -103,10 +110,14 @@ function Files() {
       return
     }
 
-    addFiles(fileList, currentFolderId)
+    await addFiles(fileList, currentPath)
     await Swal.fire({
-      title: 'Berkas berhasil ditambahkan ke simulasi drive',
-      text: 'Metadata file disimpan di state lokal dan belum tersimpan ke /srv/drive.',
+      title: backend.connected
+        ? 'Berkas berhasil diunggah ke storage server'
+        : 'Berkas berhasil ditambahkan ke simulasi drive',
+      text: backend.connected
+        ? 'File asli sudah ditulis ke storage root aktif.'
+        : 'Metadata file disimpan di state lokal dan belum tersimpan ke /srv/drive.',
       icon: 'success',
       confirmButtonColor: '#0c253b',
     })
@@ -126,7 +137,7 @@ function Files() {
       return
     }
 
-    renameItem(renameTarget.id, name)
+    await renameItem(renameTarget.path, name)
     setRenameTarget(null)
     await Swal.fire({
       title: 'Nama berhasil diperbarui',
@@ -136,6 +147,15 @@ function Files() {
   }
 
   const handleDummyDownload = async (item) => {
+    if (isServerMode) {
+      const url = downloadUrlForPath(item.path)
+
+      if (url) {
+        window.open(url, '_blank', 'noopener,noreferrer')
+        return
+      }
+    }
+
     await Swal.fire({
       title: 'Download dummy dimulai',
       text: `${item.name} belum diunduh sungguhan karena backend belum tersedia.`,
@@ -147,7 +167,7 @@ function Files() {
   return (
     <div className="space-y-6">
       <div className="space-y-4">
-        <Breadcrumb items={breadcrumbs} onNavigate={(folderId) => setParams(folderId ? { folder: folderId } : {})} />
+        <Breadcrumb items={breadcrumbs} onNavigate={openFolder} />
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="w-full lg:max-w-md">
             <SearchInput value={keyword} onChange={setKeyword} />
@@ -164,6 +184,19 @@ function Files() {
             <ViewToggle value={view} onChange={setView} />
           </div>
         </div>
+        <div className="flex flex-wrap gap-2">
+          <span className="rounded-full bg-white px-3 py-2 text-xs font-semibold text-farros-ink">
+            Folder aktif: {currentPath}
+          </span>
+          <span className="rounded-full bg-white px-3 py-2 text-xs font-semibold text-farros-ink">
+            {backend.connected ? 'Tersambung ke server' : 'Mode simulasi'}
+          </span>
+          {isSyncing ? (
+            <span className="rounded-full bg-farros-mist px-3 py-2 text-xs font-semibold text-farros-ink">
+              Menyegarkan data...
+            </span>
+          ) : null}
+        </div>
       </div>
 
       <UploadDropzone onFiles={handleAddFiles} inputRef={uploadInputRef} />
@@ -176,7 +209,7 @@ function Files() {
                 <FolderCard
                   key={item.id}
                   item={item}
-                  onOpen={() => openFolder(item.id)}
+                  onOpen={() => openFolder(item.path)}
                   onDetail={() => setDetailTarget(item)}
                   onRename={() => setRenameTarget(item)}
                   onDownload={() => handleDummyDownload(item)}
@@ -201,7 +234,7 @@ function Files() {
                 key={item.id}
                 item={item}
                 clickable={item.type === 'folder'}
-                onOpen={item.type === 'folder' ? () => openFolder(item.id) : undefined}
+                onOpen={item.type === 'folder' ? () => openFolder(item.path) : undefined}
                 onDetail={() => setDetailTarget(item)}
                 onRename={() => setRenameTarget(item)}
                 onDownload={() => handleDummyDownload(item)}

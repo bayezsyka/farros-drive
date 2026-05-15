@@ -14,7 +14,7 @@ function Trash() {
   const trashItems = getTrashItems()
 
   const handleRestore = async (item) => {
-    restoreItem(item.id)
+    await restoreItem(item.trashPath, item.originalPath || item.path)
     await Swal.fire({
       title: 'Item berhasil dipulihkan',
       text: `${item.name} kembali ke lokasi sebelumnya.`,
@@ -35,7 +35,7 @@ function Trash() {
     })
 
     if (result.isConfirmed) {
-      deleteForever(item.id)
+      await deleteForever(item.trashPath)
       await Swal.fire({
         title: 'Item dihapus permanen',
         icon: 'success',

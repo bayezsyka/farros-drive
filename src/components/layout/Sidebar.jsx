@@ -1,9 +1,12 @@
 import clsx from 'clsx'
 import { HardDrive } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
+import { useDriveStore } from '../../hooks/useDriveStore'
 import Badge from '../ui/Badge'
 
 function Sidebar({ items }) {
+  const { backend } = useDriveStore()
+
   return (
     <aside className="hidden border-r border-white/60 bg-white/55 px-6 py-8 backdrop-blur xl:flex xl:flex-col">
       <div className="panel-surface p-5">
@@ -20,7 +23,7 @@ function Sidebar({ items }) {
         </div>
         <div className="mt-5 flex flex-wrap gap-2">
           <Badge variant="success">drive.farros.space</Badge>
-          <Badge>UI simulasi</Badge>
+          <Badge variant={backend.connected ? 'success' : 'neutral'}>{backend.statusLabel}</Badge>
         </div>
       </div>
 
@@ -47,11 +50,12 @@ function Sidebar({ items }) {
 
       <div className="panel-muted mt-auto p-5">
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-farros-ink">
-          Rencana backend
+          Status backend
         </p>
         <p className="mt-3 text-sm leading-6 text-farros-ink">
-          Fase berikutnya akan menghubungkan UI ini ke API Go untuk membaca berkas asli dari
-          `/srv/drive`.
+          {backend.connected
+            ? `API aktif dan membaca storage nyata dari ${backend.storageRoot}.`
+            : 'Frontend sedang memakai fallback localStorage karena API belum aktif atau belum dikonfigurasi.'}
         </p>
       </div>
     </aside>

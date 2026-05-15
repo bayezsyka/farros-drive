@@ -1,4 +1,5 @@
 import { formatBytes, formatDateTime } from '../../lib/formatters'
+import { useDriveStore } from '../../hooks/useDriveStore'
 import { getItemStatus } from '../../lib/fileUtils'
 import Badge from '../ui/Badge'
 import Modal from '../ui/Modal'
@@ -13,6 +14,8 @@ function InfoRow({ label, value }) {
 }
 
 function FileDetailModal({ item, open, onClose }) {
+  const { isServerMode } = useDriveStore()
+
   if (!item) {
     return null
   }
@@ -22,7 +25,11 @@ function FileDetailModal({ item, open, onClose }) {
       open={open}
       onClose={onClose}
       title="Detail Item"
-      description="Metadata ini masih berasal dari state lokal dan siap disambungkan ke backend Go."
+      description={
+        isServerMode
+          ? 'Metadata ini dibaca dari storage server melalui backend Go.'
+          : 'Metadata ini masih berasal dari state lokal dan siap disambungkan ke backend Go.'
+      }
     >
       <div className="space-y-3">
         <InfoRow label="Nama" value={item.name} />
