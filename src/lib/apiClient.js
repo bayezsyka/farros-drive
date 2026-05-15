@@ -64,7 +64,18 @@ async function request(endpoint, options = {}) {
 
   const contentType = response.headers.get('Content-Type') || ''
   if (contentType.includes('application/json')) {
-    return response.json()
+    const payload = await response.json()
+
+    if (
+      payload &&
+      typeof payload === 'object' &&
+      Object.prototype.hasOwnProperty.call(payload, 'success') &&
+      Object.prototype.hasOwnProperty.call(payload, 'data')
+    ) {
+      return payload.data
+    }
+
+    return payload
   }
 
   return response

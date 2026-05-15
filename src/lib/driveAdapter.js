@@ -77,7 +77,7 @@ export function adaptApiItem(item) {
   return {
     id: trashPath || itemPath,
     name: item.name,
-    type: item.kind === 'folder' ? 'folder' : 'file',
+    type: (item.kind || item.type) === 'folder' ? 'folder' : 'file',
     extension: item.extension || getExtension(item.name),
     mimeType: item.mimeType || 'application/octet-stream',
     size: Number(item.size || 0),
