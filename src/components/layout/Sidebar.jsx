@@ -4,52 +4,67 @@ import { NavLink } from 'react-router-dom'
 import { useDriveStore } from '../../hooks/useDriveStore'
 
 function Sidebar({ items }) {
-  const { backend, logout } = useDriveStore()
+  const { logout } = useDriveStore()
 
   return (
-    <aside className="hidden border-r border-black/5 bg-white/72 px-5 py-5 backdrop-blur xl:flex xl:flex-col">
-      <div className="rounded-[28px] border border-black/5 bg-farros-navy px-5 py-5 text-farros-ivory">
-        <div className="flex items-center gap-3">
-          <div className="rounded-2xl bg-white/12 p-3">
-            <HardDrive size={20} />
-          </div>
-          <div>
-            <p className="font-serif text-2xl">Farros Drive</p>
-            <p className="text-sm text-farros-ivory/70">drive.farros.space</p>
+    <aside className="group sticky top-0 hidden h-screen w-[68px] flex-col border-r border-black/8 bg-white/80 py-5 backdrop-blur-xl transition-[width] duration-300 ease-in-out hover:w-56 xl:flex">
+
+      {/* Logo */}
+      <div className="flex h-10 w-full flex-shrink-0 items-center overflow-hidden">
+        <div className="flex w-[68px] flex-shrink-0 items-center justify-center">
+          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-farros-navy text-farros-ivory shadow-sm">
+            <HardDrive size={18} />
           </div>
         </div>
-        <div className="mt-5 flex items-center gap-2 text-xs text-farros-ivory/78">
-          <span className={clsx('inline-block h-2.5 w-2.5 rounded-full', backend.connected ? 'bg-emerald-400' : 'bg-amber-400')} />
-          <span>{backend.connected ? 'Backend online' : 'Backend bermasalah'}</span>
-        </div>
+        <span className="whitespace-nowrap font-serif text-lg text-farros-navy opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+          Farros Drive
+        </span>
       </div>
 
-      <nav className="mt-6 space-y-1.5">
+      <div className="my-4 h-px w-full bg-black/5" />
+
+      {/* Nav Items */}
+      <nav className="flex flex-1 flex-col gap-1 px-2.5">
         {items.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
             className={({ isActive }) =>
               clsx(
-                'flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition',
-                isActive ? 'bg-white text-farros-navy shadow-sm' : 'text-farros-ink hover:bg-white/70',
+                'flex h-10 w-full items-center overflow-hidden rounded-xl transition-all duration-200',
+                isActive
+                  ? 'bg-farros-navy text-white'
+                  : 'text-farros-ink hover:bg-black/5',
               )
             }
           >
-            <item.icon size={18} />
-            <span>{item.label}</span>
+            {/* Icon always centered in a fixed-width slot */}
+            <span className="flex w-[44px] flex-shrink-0 items-center justify-center">
+              <item.icon size={18} />
+            </span>
+            <span className="whitespace-nowrap text-sm font-semibold opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+              {item.label}
+            </span>
           </NavLink>
         ))}
       </nav>
 
-      <button
-        type="button"
-        onClick={logout}
-        className="mt-auto flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold text-farros-ink transition hover:bg-white/70"
-      >
-        <LogOut size={18} />
-        <span>Keluar</span>
-      </button>
+      {/* Logout */}
+      <div className="px-2.5">
+        <button
+          type="button"
+          onClick={logout}
+          className="flex h-10 w-full items-center overflow-hidden rounded-xl text-red-500 transition-all duration-200 hover:bg-red-50"
+        >
+          <span className="flex w-[44px] flex-shrink-0 items-center justify-center">
+            <LogOut size={18} />
+          </span>
+          <span className="whitespace-nowrap text-sm font-semibold opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+            Keluar
+          </span>
+        </button>
+      </div>
+
     </aside>
   )
 }

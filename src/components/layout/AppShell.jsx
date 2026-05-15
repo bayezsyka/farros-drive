@@ -26,7 +26,7 @@ function AppShell() {
   const title = routeTitles[location.pathname] || 'Farros Drive'
 
   return (
-    <div className="min-h-screen xl:grid xl:grid-cols-[260px_minmax(0,1fr)]">
+    <div className="min-h-screen xl:grid xl:grid-cols-[auto_minmax(0,1fr)]">
       <Sidebar items={navigationItems} />
       <div className="min-w-0 px-4 py-4 sm:px-6 xl:px-7">
         <div className="mx-auto flex min-h-[calc(100vh-2rem)] max-w-7xl flex-col gap-4 pb-28 xl:pb-6">
